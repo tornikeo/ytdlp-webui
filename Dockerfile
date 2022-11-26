@@ -7,5 +7,4 @@ RUN pip install -r requirements.txt
 COPY app.py .
 ENV PORT=8999
 EXPOSE ${PORT}
-# CMD gradio app
-CMD uvicorn app:demo.app --reload --port ${PORT} --log-level warning
+CMD streamlit run --server.port ${PORT} app.py --browser.gatherUsageStats False

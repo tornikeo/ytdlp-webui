@@ -7,6 +7,9 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 import logging
+import shutil
+from typing import List
+
 
 logger = logging.Logger(__name__, level='DEBUG')
 
@@ -24,24 +27,23 @@ EXTRACT_AUDIO_OPTS = {
     # ℹ️ See help(yt_dlp.postprocessor) for a list of available Postprocessors and their arguments
     'postprocessors': [{  # Extract audio using ffmpeg
         'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'm4a',
+        'preferredcodec': 'mp3',
     }]
 }
-
-def get_dir_file_names_as_list(suffix):
-    return list([str(e.name) for e in user_download_dir.glob('*') if e.suffix == suffix])
-
-def get_dir_contents_as_list():
-    return list([str(e) for e in user_download_dir.glob('*')])
 
 def get_random_string():
     return str(uuid4()).replace('-','')[:8]
 
+def dir_contents(dir:Path) -> List:
+    folder_contents = list(Path(dir).glob('*'))
+    return folder_contents
+
 def download_fn(url, extract_audio):
     print("Download triggered, with ", url)
     # with tempfile.Tem() as f:
-    download_dir = Path(f'/tmp/yt_dlp_downloads/{get_random_string()}')
-    download_dir.mkdir(exist_ok=True)
+    session_dir = Path(f'/tmp/yt_dlp_downloads/{get_random_string()}')
+    download_dir = session_dir / 'downloads'
+    download_dir.mkdir(exist_ok=True, parents=True)
     params=dict(
         # paths=dict(
             
@@ -54,9 +56,12 @@ def download_fn(url, extract_audio):
         params.update( EXTRACT_AUDIO_OPTS )
     with YoutubeDL(params) as ydl:
         ydl.download(url)
-    folder_contents = list(Path(download_dir).glob('*'))
+
+    archive_file = session_dir / 'all_files'
+    archive_file = shutil.make_archive(archive_file, 'zip', download_dir)
+
     print("Downloads complete at: ", download_dir)
-    return folder_contents
+    return dir_contents(download_dir), archive_file
 
 with gr.Blocks() as demo:
     gr.Markdown("## Download youtube videos")
@@ -76,7 +81,15 @@ with gr.Blocks() as demo:
         with gr.Row():
             with gr.Column():   
                 gr.Markdown("### Step 4 - Download files")
-                download_files = gr.File(label='Downloaded files will appear here', file_count="multiple", interactive=False)
+                with gr.Tab("All files"):   
+                    download_pack = gr.File(label='Downloaded files will appear here', file_count="single", interactive=False)
+                with gr.Tab("Particular files"):
+                    download_files = gr.File(label='Downloaded files will appear here', file_count="multiple", interactive=False)
+
+        # with gr.Row():
+        #     with gr.Column():   
+        #         gr.Markdown("### Step 4 - Download files optionally or ...")
+        #         download_files = gr.File(label='Downloaded files will appear here', file_count="multiple", interactive=False)
     # with gr.Tab("Postprocess"):
     #     with gr.Tab("Audio files (MP3)"):
     #         with gr.Row():
@@ -90,8 +103,13 @@ with gr.Blocks() as demo:
     #             postprocess = gr.Button() 
     download.click(download_fn, 
         inputs=[video_url, extract_audio],
-        outputs=[download_files]
+        outputs=[download_files, download_pack]
     )
 
+demo.show_error = True
+demo.show_tips = False
+demo.enable_queue = True
+demo.show_api = False
+
 if __name__ == "__main__":
-    demo.launch(server_name='0.0.0.0', server_port=os.environ.get('PORT', 8999), show_error=True, show_tips=False, show_api=False)
+    demo.launch(enable_queue=True, server_name='0.0.0.0', server_port=os.environ.get('PORT', 8999), show_error=True, show_tips=False, show_api=False)

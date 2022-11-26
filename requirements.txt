@@ -1,2 +1,3 @@
 gradio
 yt-dlp
+ffmpeg-python

@@ -6,4 +6,5 @@ services:
       - 8000:8000
     volumes:
       - .:/code/app
-    entrypoint: tail -f /dev/null
+    command: /bin/bash
+    tty: True

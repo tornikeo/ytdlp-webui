@@ -4,4 +4,6 @@ WORKDIR /code/app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY app.py .
-ENTRYPOINT gradio app
+ENV PORT
+EXPOSE ${PORT}
+CMD gradio app

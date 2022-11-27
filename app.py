@@ -10,7 +10,6 @@ import logging
 import shutil
 from typing import List
 import streamlit as st
-import pandas as pd
 
 logger = logging.Logger(__name__, level='DEBUG')
 
@@ -22,6 +21,15 @@ def cwd(path):
         yield
     finally:
         os.chdir(oldpwd)
+
+@contextmanager
+def session_state_flag(flagname: str):
+    st.session_state[flagname] = True
+    try:
+        yield
+    finally:
+        st.session_state[flagname] = False
+
 
 EXTRACT_AUDIO_OPTS = {
     'format': 'm4a/bestaudio/best',
@@ -38,26 +46,44 @@ def get_random_string():
 def dir_contents(dir:Path) -> List:
     folder_contents = list(Path(dir).glob('*'))
     return folder_contents
+def trim_with_elipsis(s:str, max_len=24)->str:
+    if len(s) < max_len:
+        return s
+    else:
+        return s[:max_len] + '...'
 
-st.session_state.is_loading = False
-
-def download_fn():
-    with st.spinner("Loading..."):
-        url = st.session_state.url
+def download_fn(url: str, audio:bool, progbar, progstr):
+    with session_state_flag('loading'):
+        st.session_state.loading = True
         print("Download triggered, with ", url)
         # with tempfile.Tem() as f:
         session_dir = Path(f'/tmp/yt_dlp_downloads/{get_random_string()}')
         download_dir = session_dir / 'downloads'
         download_dir.mkdir(exist_ok=True, parents=True)
+
+
+        progbar = progbar.progress(0)
+        progstr.write("Process starting...")
+        def _increment(state):
+            try:
+                info_dict = state['info_dict']
+                progstr.write("Loading: "+trim_with_elipsis(info_dict['title']))
+                if state['status'] == "finished":
+                    progbar.progress(float(info_dict['playlist_index'] / info_dict['n_entries']))
+            except KeyError as e:
+                print("Missing key, ignoring error: ", e)
+            
+
         params=dict(
             # paths=dict(
                 
             # )
+            playlist_items = f'1-{st.session_state.get("playlist_length", 5)}',
             outtmpl=str(download_dir / '%(title)s.%(ext)s'),
-            # progress_hooks=[print],
+            progress_hooks=[_increment],
             # postprogress_hooks=[print]
         )
-        if "music" in st.session_state.mediatype:
+        if audio:
             params.update( EXTRACT_AUDIO_OPTS )
 
         with YoutubeDL(params) as ydl:
@@ -66,12 +92,8 @@ def download_fn():
         archive_file = shutil.make_archive(archive_file, 'zip', download_dir)
 
         print("Downloads complete at: ", download_dir)
-
-        # st.session_state.download_dir = download_dir
-        # st.session_state.download_paths = dir_contents(download_dir)
-        # return dir_contents(download_dir), archive_file
         st.session_state.download_file = archive_file
-    st.success("Done!")
+
 st.header('Download youtube videos')
 with st.container():
     with st.container():
@@ -84,22 +106,35 @@ with st.container():
         st.subheader('Step 2 - Choose options')
         with st.container():
             st.radio(
-                "Do you want a video or just the sound?",
-                ["Give me the music 🎵","I want a full video 🎥"],
+                "What do you need?",
+                ["Give me the music 🎵","I want the video 🎥"],
                 index=0,
                 horizontal=True,
                 key="mediatype"
             )
             st.slider(
                 "(Playlist) How many videos do you want?",
-                1, 20, 5,
+                1, 20, 2,
+                key="playlist_length"
             )
     with st.container():
         st.subheader('Step 3 - Prepare files')
-        st.button(
-            label="Prepare files ⚙️",
-            on_click=download_fn
-        )
+        col1, col2 = st.columns([2,5])
+        with col2:
+            progstr = st.empty()
+            progbar = st.empty()
+        with col1:
+            st.button(
+                label="Prepare files ⚙️",
+                on_click=download_fn,
+                kwargs=dict(
+                    audio="music" in st.session_state.mediatype,
+                    url = st.session_state.url, 
+                    progbar = progbar,
+                    progstr = progstr,
+                )
+            )
+            
     with st.container():
         st.subheader('Step 4 - Download files')
 
@@ -109,54 +144,9 @@ with st.container():
             data=Path(st.session_state.download_file).open('rb'),
             file_name="Youtube_Downloads.zip",
         )   
-
-# with gr.Blocks() as demo:
-#     gr.Markdown("## Download youtube videos")
-#     with gr.Tab("Download"):
-#         with gr.Row():
-#             with gr.Column():   
-#                 gr.Markdown("### Step 1 - Paste URL below")
-#                 video_url = gr.Textbox(lines=1, max_lines=1, label="URL", value="https://www.youtube.com/watch?v=UT5F9AXjwhg&list=PL5v_4vO5F1GUpKg7or5qjeE8gfHgpvLCB") #value="https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-#         with gr.Row():
-#             with gr.Column():
-#                 gr.Markdown("### Step 2 - Choose options")
-#                 extract_audio = gr.Checkbox(label="Extract audio (mp3)")
-#         with gr.Row():
-#             with gr.Column():   
-#                 gr.Markdown("### Step 3 - Prepare files")
-#                 download = gr.Button(value="Prepare files")
-#         with gr.Row():
-#             with gr.Column():   
-#                 gr.Markdown("### Step 4 - Download files")
-#                 with gr.Tab("All files"):   
-#                     download_pack = gr.File(label='Downloaded files will appear here', file_count="single", interactive=False)
-#                 with gr.Tab("Particular files"):
-#                     download_files = gr.File(label='Downloaded files will appear here', file_count="multiple", interactive=False)
-
-#         # with gr.Row():
-#         #     with gr.Column():   
-#         #         gr.Markdown("### Step 4 - Download files optionally or ...")
-#         #         download_files = gr.File(label='Downloaded files will appear here', file_count="multiple", interactive=False)
-#     # with gr.Tab("Postprocess"):
-#     #     with gr.Tab("Audio files (MP3)"):
-#     #         with gr.Row():
-#     #             postprocess_files = gr.CheckboxGroup(choices=get_dir_file_names_as_list('.mp3'), file_count="multiple")
-#     #         with gr.Row():
-#     #             postprocess = gr.Button()
-#     #     with gr.Tab("Video files (MP4)"):
-#     #         with gr.Row():
-#     #             postprocess_files = gr.CheckboxGroup(choices=get_dir_file_names_as_list('.mp4'), file_count="multiple")
-#     #         with gr.Row():
-#     #             postprocess = gr.Button() 
-#     download.click(download_fn, 
-#         inputs=[video_url, extract_audio],
-#         outputs=[download_files, download_pack]
-#     )
-
-# demo.show_error = True
-# demo.show_tips = False
-# demo.enable_queue = True
-# demo.show_api = False
-
-# if __name__ == "__main__":
-#     demo.launch(enable_queue=True, server_name='0.0.0.0', server_port=os.environ.get('PORT', 8999), show_error=True, show_tips=False, show_api=False)
+    else:
+        st.button(
+            label=' ⬇️ Download files 📁',
+            disabled=True,
+            help='Psst! Click "Prepare Files" first.'
+        )

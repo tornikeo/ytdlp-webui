@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../usr/local/lib/python3.8/site-packages/yt_dlp"
+		}
+	],
+	"settings": {}
+}

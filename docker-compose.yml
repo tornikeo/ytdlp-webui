@@ -1,10 +1,13 @@
 version: '3.9'
 services:
   app:
-    build: .
+    image: ytdlp-webui
+    build: 
+      context: .
+      dockerfile: Dockerfile
     ports:
       - 8000:8000
     volumes:
       - .:/code/app
-    command: /bin/sh -c "while sleep 1000; do :; done"
+    # command: /bin/sh -c "while sleep 1000; do :; done"
     tty: True

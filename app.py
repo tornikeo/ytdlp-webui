@@ -192,7 +192,7 @@ with st.container():
         st.download_button(
             label=' ⬇️ Download files 📁',
             data=file,
-            file_name="Youtube_Downloads.zip",
+            file_name=Path(st.session_state.download_file).name,
         )   
     else:
         st.button(

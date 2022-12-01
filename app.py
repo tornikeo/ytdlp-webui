@@ -77,7 +77,7 @@ def download_fn(url: str, audio:bool, quality:str, progress):
         st.session_state.loading = True
         print("Download triggered, with ", url)
         # with tempfile.Tem() as f:
-        session_dir = Path(f'/tmp/yt_dlp_downloads/{get_random_string()}')
+        session_dir = Path(f'tmp/yt_dlp_downloads/{get_random_string()}')
         download_dir = session_dir / 'downloads'
         download_dir.mkdir(exist_ok=True, parents=True)
 
@@ -187,9 +187,11 @@ with st.container():
         st.subheader('Step 4 - Download files')
 
     if 'download_file' in st.session_state:
+        from io import BytesIO
+        file = BytesIO(Path(st.session_state.download_file).open('rb').read())
         st.download_button(
             label=' ⬇️ Download files 📁',
-            data=Path(st.session_state.download_file).open('rb'),
+            data=file,
             file_name="Youtube_Downloads.zip",
         )   
     else:

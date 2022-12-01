@@ -5,6 +5,6 @@ WORKDIR /code/app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY app.py .
-ENV PORT=8999
+ENV PORT=80
 EXPOSE ${PORT}
 CMD streamlit run --server.port ${PORT} app.py --browser.gatherUsageStats False

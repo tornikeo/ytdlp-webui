@@ -40,6 +40,19 @@ EXTRACT_AUDIO_OPTS = {
     }]
 }
 
+
+LOW_QUALITY_OPS = {
+    'format': 'bestvideo[height<=360]+bestaudio/best[height<=360]'
+}
+
+MED_QUALITY_OPS = {
+    'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]'
+}
+
+HIGH_QUALITY_OPS = {
+    'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]'
+}
+
 def get_random_string():
     return str(uuid4()).replace('-','')[:8]
 
@@ -52,7 +65,7 @@ def trim_with_elipsis(s:str, max_len=24)->str:
     else:
         return s[:max_len] + '...'
 
-def download_fn(url: str, audio:bool, progbar, progstr):
+def download_fn(url: str, audio:bool, quality:str, progbar, progstr):
     with session_state_flag('loading'):
         st.session_state.loading = True
         print("Download triggered, with ", url)
@@ -86,8 +99,16 @@ def download_fn(url: str, audio:bool, progbar, progstr):
         if audio:
             params.update( EXTRACT_AUDIO_OPTS )
 
+        if quality == "Low quality":
+            params.update( LOW_QUALITY_OPS )
+        elif quality == "Regular quality":
+            params.update( MED_QUALITY_OPS )
+        else:
+            params.update( HIGH_QUALITY_OPS )
+
         with YoutubeDL(params) as ydl:
             ydl.download(url)
+
         archive_file = session_dir / 'all_files'
         archive_file = shutil.make_archive(archive_file, 'zip', download_dir)
 
@@ -112,6 +133,12 @@ with st.container():
                 horizontal=True,
                 key="mediatype"
             )
+            st.select_slider(
+                "(Video) What quality do you want?",
+                options=['Low quality', 'Regular quality', 'High quality'],
+                value='Regular quality',
+                key="quality"
+            )
             st.slider(
                 "(Playlist) How many videos do you want?",
                 1, 20, 2,
@@ -130,6 +157,7 @@ with st.container():
                 kwargs=dict(
                     audio="music" in st.session_state.mediatype,
                     url = st.session_state.url, 
+                    quality = st.session_state.quality,
                     progbar = progbar,
                     progstr = progstr,
                 )

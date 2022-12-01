@@ -10,6 +10,7 @@ import logging
 import shutil
 from typing import List
 import streamlit as st
+import re
 
 logger = logging.Logger(__name__, level='DEBUG')
 
@@ -53,6 +54,10 @@ HIGH_QUALITY_OPS = {
     'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]'
 }
 
+ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+def ans_esc(s):
+    return ansi_escape.sub('', s)
+
 def get_random_string():
     return str(uuid4()).replace('-','')[:8]
 
@@ -65,7 +70,7 @@ def trim_with_elipsis(s:str, max_len=24)->str:
     else:
         return s[:max_len] + '...'
 
-def download_fn(url: str, audio:bool, quality:str, progbar, progstr):
+def download_fn(url: str, audio:bool, quality:str, progress):
     with session_state_flag('loading'):
         st.session_state.loading = True
         print("Download triggered, with ", url)
@@ -75,14 +80,23 @@ def download_fn(url: str, audio:bool, quality:str, progbar, progstr):
         download_dir.mkdir(exist_ok=True, parents=True)
 
 
-        progbar = progbar.progress(0)
-        progstr.write("Process starting...")
+        with progress.container():
+            st.write("Loading: ...")
+            st.write('ETA') 
+            st.write("Progress: 0%")
+            progbar = st.progress(0)
+
         def _increment(state):
             try:
                 info_dict = state['info_dict']
-                progstr.write("Loading: "+trim_with_elipsis(info_dict['title']))
-                if state['status'] == "finished":
-                    progbar.progress(float(info_dict['playlist_index'] / info_dict['n_entries']))
+                prog = float(ans_esc(ans_esc(state['_percent_str'])).strip()[:-1])
+                with progress.container():
+                    st.write("Loading: "+trim_with_elipsis(info_dict['title']))
+                    st.write("ETA: "+ans_esc(state['_eta_str']))
+                    st.write('Progress: '+str(prog)+'%')
+                    pl_idx = info_dict.get('playlist_index',0) or 0
+                    pl_len = info_dict.get('n_entries', 1) or 1
+                    progbar.progress(float( pl_idx / pl_len + (prog / 100)))
             except KeyError as e:
                 print("Missing key, ignoring error: ", e)
             
@@ -115,7 +129,7 @@ def download_fn(url: str, audio:bool, quality:str, progbar, progstr):
         print("Downloads complete at: ", download_dir)
         st.session_state.download_file = archive_file
 
-st.header('Download youtube videos')
+st.header('Download videos from ANY popular website')
 with st.container():
     with st.container():
         st.subheader('Step 1 - Paste URL below')
@@ -148,8 +162,7 @@ with st.container():
         st.subheader('Step 3 - Prepare files')
         col1, col2 = st.columns([2,5])
         with col2:
-            progstr = st.empty()
-            progbar = st.empty()
+            progress = st.empty()
         with col1:
             st.button(
                 label="Prepare files ⚙️",
@@ -158,8 +171,7 @@ with st.container():
                     audio="music" in st.session_state.mediatype,
                     url = st.session_state.url, 
                     quality = st.session_state.quality,
-                    progbar = progbar,
-                    progstr = progstr,
+                    progress = progress,
                 )
             )
             

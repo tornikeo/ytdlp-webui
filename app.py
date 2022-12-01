@@ -70,6 +70,8 @@ def trim_with_elipsis(s:str, max_len=24)->str:
     else:
         return s[:max_len] + '...'
 
+def reload():
+    pass
 def download_fn(url: str, audio:bool, quality:str, progress):
     with session_state_flag('loading'):
         st.session_state.loading = True
@@ -81,22 +83,26 @@ def download_fn(url: str, audio:bool, quality:str, progress):
 
 
         with progress.container():
-            st.write("Loading: ...")
-            st.write('ETA') 
-            st.write("Progress: 0%")
-            progbar = st.progress(0)
+            if "cancel_loading" not in st.session_state:
+                st.button("Cancel process", key='cancel_loading', on_click=reload)
+            progress_stats = st.empty()
+            with progress_stats.container():
+                st.write("Loading: ...")
+                st.write('ETA') 
+                st.write("Progress: 0%")
+                progbar = st.progress(0)
 
         def _increment(state):
             try:
                 info_dict = state['info_dict']
                 prog = float(ans_esc(ans_esc(state['_percent_str'])).strip()[:-1])
-                with progress.container():
+                pl_idx = info_dict.get('playlist_index',0) or 0
+                pl_len = info_dict.get('n_entries', 1) or 1
+                with progress_stats.container():
                     st.write("Loading: "+trim_with_elipsis(info_dict['title']))
                     st.write("ETA: "+ans_esc(state['_eta_str']))
                     st.write('Progress: '+str(prog)+'%')
-                    pl_idx = info_dict.get('playlist_index',0) or 0
-                    pl_len = info_dict.get('n_entries', 1) or 1
-                    progbar.progress(float( pl_idx / pl_len + (prog / 100)))
+                    progbar.progress(min(float( pl_idx / pl_len + (prog / 100)), 1.0 ))
             except KeyError as e:
                 print("Missing key, ignoring error: ", e)
             
@@ -123,11 +129,13 @@ def download_fn(url: str, audio:bool, quality:str, progress):
         with YoutubeDL(params) as ydl:
             ydl.download(url)
 
-        archive_file = session_dir / 'all_files'
-        archive_file = shutil.make_archive(archive_file, 'zip', download_dir)
-
-        print("Downloads complete at: ", download_dir)
-        st.session_state.download_file = archive_file
+        if len(list(download_dir.glob('*'))) > 1:
+            archive_file = session_dir / 'all_files'
+            archive_file = shutil.make_archive(archive_file, 'zip', download_dir)
+            print("Downloads complete at: ", download_dir)
+            st.session_state.download_file = archive_file
+        else:
+            st.session_state.download_file = list(download_dir.glob('*'))[0]
 
 st.header('Download videos from ANY popular website')
 with st.container():
